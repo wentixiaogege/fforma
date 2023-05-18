@@ -2,17 +2,13 @@ import pandas as pd
 import numpy as np
 import multiprocessing as mp
 import lightgbm as lgb
-
-import copy
-
 from sklearn.model_selection import StratifiedKFold
 from scipy.special import softmax
 from tsfeatures import tsfeatures
 from math import isclose
 from fforma.utils_input import _check_valid_df, _check_same_type, _check_passed_dfs, _check_valid_columns
 from fforma.utils_models import _train_lightgbm, _train_lightgbm_cv, _train_lightgbm_grid_search
-
-
+import copy
 
 class FFORMA:
 
@@ -82,7 +78,7 @@ class FFORMA:
 
     def _tsfeatures(self, y_train_df, y_val_df, freq):
         #TODO receive panel of freq
-        complete_data = pd.concat([y_train_df, y_test_df.filter(items=['unique_id', 'ds', 'y'])])
+        complete_data = pd.concat([y_train_df, y_val_df.filter(items=['unique_id', 'ds', 'y'])])
         holdout_feats = tsfeatures(y_train_df)
         feats = tsfeatures(complete_data)
 
@@ -141,7 +137,7 @@ class FFORMA:
 
         if (errors is None) and (feats is None):
             assert (y_train_df is not None) and (y_val_df is not None), "you must provide a y_train_df and y_val_df"
-            is_pandas_df = _check_passed_dfs(y_train_df, y_val_df_)
+            is_pandas_df = _check_passed_dfs(y_train_df, y_val_df)
 
             if not sorted_data:
                 if is_pandas_df:

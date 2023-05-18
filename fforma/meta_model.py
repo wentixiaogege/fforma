@@ -32,7 +32,47 @@ class MetaModels:
     def __init__(self, models, scheduler='processes'):
         self.models = models
         self.scheduler = scheduler
-
+    ###https://zhuanlan.zhihu.com/p/478551556?utm_id=0
+    def sktime_add_freq(self,train):
+        perd = pd.infer_freq(train.index)
+        using_p = perd
+        if perd in ["MS", "M", "BM", "BMS"]:
+            train.index = pd.PeriodIndex(train.index, freq="M")
+            using_p = 'M'
+        elif perd in ["BH", "H"]:
+            train.index = pd.PeriodIndex(train.index, freq="H")
+            using_p = 'H'
+        elif perd == "B":
+            train.index = pd.PeriodIndex(train.index, freq="B")
+            using_p = 'B'
+        elif perd == "D":
+            train.index = pd.PeriodIndex(train.index, freq="D")
+            using_p = 'D'
+        elif perd in ["W", "W-SUN", "W-MON", "W-TUE", "W-WED", "W-THU", "W-FRI", "W-SAT"]:
+            train.index = pd.PeriodIndex(train.index, freq="W")
+            using_p = 'W'
+        elif perd in ["Q", "QS", "BQ", "BQS","Q-DEC","BQ-DEC","QS-OCT","BQS-OCT"]:
+            train.index = pd.PeriodIndex(train.index, freq="Q")
+            using_p = 'Q'
+        elif perd in ["A", "BA", "AS", "BAS","A-DEC","BA-DEC","AS-JAN","BAS-JAN"]:
+            train.index = pd.PeriodIndex(train.index, freq="A")
+            using_p = 'A'
+        elif perd in ["T", "min"]:
+            train.index = pd.PeriodIndex(train.index, freq="m")
+            using_p = 'm'
+        elif perd == "S":
+            train.index = pd.PeriodIndex(train.index, freq="s")
+            using_p = 's'
+        elif perd in ["L", "ms"]:
+            train.index = pd.PeriodIndex(train.index, freq="L")
+            using_p = 'L'
+        elif perd in ["U", "us"]:
+            train.index = pd.PeriodIndex(train.index, freq="U")
+            using_p = 'U'
+        elif perd == "N":
+            train.index = pd.PeriodIndex(train.index, freq="N")
+            using_p = 'N'
+        return train, using_p
     def fit(self, y_panel_df):
         """For each time series fit each model in models.
 
@@ -45,27 +85,39 @@ class MetaModels:
         name_models = []
         for ts, meta_model in product(y_panel_df.groupby('unique_id'), self.models.items()):
             uid, y = ts
-            y = y['y'].values
             name_model, model = deepcopy(meta_model)
-            # fitted_model = dask.delayed(model.fit)(y)
-            fitted_model = model.fit(y)
+            # print('dealing with ',uid,name_model)
+            if name_model in ['Naive','Naive1','Naive3','Theta','ExponentialSmoothing','ETS','AutoETS','Croston']:
+                y = y.set_index('ds')['y']
+                y1, _ = self.sktime_add_freq(y.copy())
+                try:
+                    fitted_model = model.fit(y1)
+                except Exception as e:
+                    print('ljj debugging e',e)
+                    from sktime.forecasting.naive import NaiveForecaster
+                    forecaster = NaiveForecaster(strategy="drift")
+                    fitted_model = forecaster.fit(y1)
+                    # fitted_model = dask.delayed(forecaster.fit)(y1)
+
+                # fitted_model.predict(fh=np.arange(14)) ###debugging
+            else: ##### 默认R语言的包，需要这个流程
+                y = y['y'].values
+                # fitted_model = dask.delayed(model.fit)(y)
+                fitted_model = model.fit(y)
             fitted_models.append(fitted_model)
             uids.append(uid)
             name_models.append(name_model)
 
         # fitted_models = dask.delayed(fitted_models).compute(scheduler=self.scheduler)
-
         fitted_models = pd.DataFrame.from_dict({'unique_id': uids,
                                                 'model': name_models,
                                                 'fitted_model': fitted_models})
 
         self.fitted_models_ = fitted_models.set_index(['unique_id', 'model'])
-
         return self
 
     def predict(self, y_hat_df):
         """Predict each model for each time series.
-
         y_hat_df: pandas df
             Pandas DataFrame with columns ['unique_id', 'ds']
         """
@@ -83,8 +135,18 @@ class MetaModels:
             model = self.fitted_models_.loc[(uid, name_model)]
             model = model.item()
             # y_hat = dask.delayed(model.predict)(h)
-            y_hat = model.predict(h)
-            forecasts.append(y_hat)
+            if name_model in ['Naive','Naive1','Naive3','Theta','ExponentialSmoothing','ETS','AutoETS','Croston']:
+                try:
+                    y_hat = model.predict(fh=np.arange(h+1)).values[1:]
+                    # y_hat = dask.delayed(model.predict)(np.arange(h+1))
+
+                except Exception as e:
+                    print('ljj predict e',e)
+                    y_hat = np.array([0.0]*h)
+            else:##### 默认R语言的包，需要这个流程
+                y_hat = model.predict(h)
+                # y_hat = dask.delayed(model.predict)(h)
+            forecasts.append(y_hat[-h:])
             uids.append(np.repeat(uid, h))
             dss.append(df['ds'])
             name_models.append(np.repeat(name_model, h))
@@ -94,6 +156,7 @@ class MetaModels:
 
         forecasts_df = []
         for uid, ds, name_model, forecast in forecasts:
+            # print('dealing with',uid,name_model)
             dict_df = {'unique_id': uid,
                        'ds': ds,
                        'model': name_model,
@@ -108,7 +171,6 @@ class MetaModels:
         forecasts = forecasts.set_index(['unique_id', 'ds', 'model']).unstack()
         forecasts = forecasts.droplevel(0, 1).reset_index()
         forecasts.columns.name = ''
-
 
         return forecasts
 
@@ -191,7 +253,7 @@ def get_prediction_panel(y_panel_df, h, freq):
     """Construct panel to use with
     predict method.
     """
-    df = y_complete_train_df[['unique_id', 'ds']].groupby('unique_id').max().reset_index()
+    df = y_panel_df[['unique_id', 'ds']].groupby('unique_id').max().reset_index()
 
     predict_panel = []
     for idx, df in df.groupby('unique_id'):
