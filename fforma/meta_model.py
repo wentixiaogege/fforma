@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
-
 import numpy as np
 import pandas as pd
-
 import dask
-
 from collections import ChainMap
 from functools import partial
 from itertools import product
@@ -14,11 +11,8 @@ from copy import deepcopy
 from sklearn.utils.validation import check_is_fitted
 from ESRNN.utils_evaluation import smape, mase, evaluate_panel
 
-
 class MetaModels:
     """
-    Train models to ensemble.
-
     Parameters
     ----------
     models: dict
@@ -28,7 +22,6 @@ class MetaModels:
         for details.
         Using "threads" can cause severe conflicts.
     """
-
     def __init__(self, models, scheduler='processes'):
         self.models = models
         self.scheduler = scheduler
@@ -75,7 +68,6 @@ class MetaModels:
         return train, using_p
     def fit(self, y_panel_df):
         """For each time series fit each model in models.
-
         y_panel_df: pandas df
             Pandas DataFrame with columns ['unique_id', 'ds', 'y']
         """
@@ -86,8 +78,8 @@ class MetaModels:
         for ts, meta_model in product(y_panel_df.groupby('unique_id'), self.models.items()):
             uid, y = ts
             name_model, model = deepcopy(meta_model)
-            # print('dealing with ',uid,name_model)
-            if name_model in ['Naive','Naive1','Naive3','Theta','ExponentialSmoothing','ETS','AutoETS','Croston']:
+            if 'R' != name_model[0]: # 非R语言版本
+            # if name_model in ['Naive','Naive1','Naive3','Theta','ExponentialSmoothing','ETS','AutoETS','Croston']:
                 y = y.set_index('ds')['y']
                 y1, _ = self.sktime_add_freq(y.copy())
                 try:
@@ -135,7 +127,8 @@ class MetaModels:
             model = self.fitted_models_.loc[(uid, name_model)]
             model = model.item()
             # y_hat = dask.delayed(model.predict)(h)
-            if name_model in ['Naive','Naive1','Naive3','Theta','ExponentialSmoothing','ETS','AutoETS','Croston']:
+            # if name_model in ['Naive','Naive1','Naive3','Theta','ExponentialSmoothing','ETS','AutoETS','Croston']:
+            if 'R' != name_model[0]: # 非R语言版本
                 try:
                     y_hat = model.predict(fh=np.arange(h+1)).values[1:]
                     # y_hat = dask.delayed(model.predict)(np.arange(h+1))

@@ -110,7 +110,8 @@ def evaluate_fforma(dataset_name, fforma_df, directory, num_obs):
     return dataset_name, owa, mase, smape
 
 def main():
-    for iter_datasets in freqs.keys():
+    # for iter_datasets in freqs.keys():
+    for iter_datasets in ['Weekly']:
         complete_errors, complete_features, complete_predictions = [], [], []
         print(1111111111111111,iter_datasets)
         for dataset in ['Weekly']: #'Daily', etc

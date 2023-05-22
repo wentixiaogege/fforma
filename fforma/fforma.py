@@ -11,7 +11,6 @@ from fforma.utils_models import _train_lightgbm, _train_lightgbm_cv, _train_ligh
 import copy
 
 class FFORMA:
-
     def __init__(self, objective='FFORMA', verbose_eval=True,
                  early_stopping_rounds=10,
                  params=None,
@@ -20,9 +19,7 @@ class FFORMA:
                  greedy_search=False,
                  threads=None, seed=260294):
         """ Feature-based Forecast Model Averaging.
-
         Python Implementation of FFORMA.
-
         Parameters
         ----------
         xgb_params:
